@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fichas de Farmacología</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+    <script>
+      const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+      };
+      firebase.initializeApp(firebaseConfig);
+      const dbFS = firebase.firestore();
+    </script>
+    <style>
+      :root { --accent: #2563eb; }
+    </style>
+    <meta name="theme-color" content="#ffffff" />
+  </head>
+  <body class="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div id="root" class="h-screen"></div>
+
+    <!-- React 18 UMD -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel Standalone for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel" data-presets="react">
+      const PREF_KEY = "ui_prefs_v1";
+      const COLOR_KEY = "color_prefs_v1";
+
+      function uid() {
+        return (Date.now().toString(36) + Math.random().toString(36).substring(2, 8)).toUpperCase();
+      }
+
+      function useLocalStorage(key, initialValue) {
+        const [value, setValue] = React.useState(() => {
+          try {
+            const item = localStorage.getItem(key);
+            return item ? JSON.parse(item) : initialValue;
+          } catch (e) {
+            console.error('useLocalStorage read error', e);
+            return initialValue;
+          }
+        });
+        React.useEffect(() => {
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+          } catch (e) {
+            console.error('useLocalStorage write error', e);
+          }
+        }, [key, value]);
+        return [value, setValue];
+      }
+
+      const DEFAULT_FIELDS = [
+        'nombre', 'familia', 'subfamilia', 'mecanismo', 'indicaciones', 'efectos_adversos',
+        'contraindicaciones', 'dosis', 'farmacocinetica', 'interacciones', 'notas', 'tags',
+      ];
+
+      const FIELD_LABEL = {
+        nombre: 'Nombre',
+        familia: 'Familia',
+        subfamilia: 'Subfamilia',
+        mecanismo: 'Mecanismo de acción',
+        indicaciones: 'Indicaciones',
+        efectos_adversos: 'Efectos adversos',
+        contraindicaciones: 'Contraindicaciones',
+        dosis: 'Dosis (adulto)',
+        farmacocinetica: 'Farmacocinética (ADME)',
+        interacciones: 'Interacciones',
+        notas: 'Notas',
+        tags: 'Etiquetas',
+      };
+
+      const QUIZ_TYPES = [
+        { id: 'mecanismo_por_farmaco', label: '¿Mecanismo del fármaco?' },
+        { id: 'familia_por_farmaco', label: '¿Familia del fármaco?' },
+        { id: 'farmaco_por_mecanismo', label: '¿Qué fármaco tiene este mecanismo?' },
+      ];
+
+      const SEED_DRUGS = [
+        {
+          id: uid(),
+          nombre: 'Propranolol',
+          familia: 'Antagonistas adrenérgicos',
+          subfamilia: 'β-bloqueadores no selectivos',
+          mecanismo: 'Antagonista competitivo de receptores β1 y β2; reduce FC, contractilidad y renina.',
+          indicaciones: 'HTA, angina, arritmias, migraña, temblor esencial.',
+          efectos_adversos: 'Bradicardia, broncoespasmo, fatiga, intolerancia al ejercicio, enmascara hipoglucemia.',
+          contraindicaciones: 'Asma, BAV de 2-3°, bradicardia significativa, IC descompensada.',
+          dosis: '40–160 mg VO cada 12 h (según indicación).',
+          farmacocinetica: 'Alta liposolubilidad; metabolismo hepático extenso (CYP).',
+          interacciones: 'Potencia efecto de otros bradicardizantes; precaución con verapamilo/diltiazem.',
+          notas: 'Evitar suspensión brusca.',
+          tags: ['cardiología','HTA'],
+        },
+        {
+          id: uid(),
+          nombre: 'Metoprolol',
+          familia: 'Antagonistas adrenérgicos',
+          subfamilia: 'β1-selectivo',
+          mecanismo: 'Antagonista selectivo β1; disminuye cronotropismo e inotropismo.',
+          indicaciones: 'HTA, angina, post-IAM, IC (seleccionado).',
+          efectos_adversos: 'Bradicardia, fatiga, disfunción eréctil.',
+          contraindicaciones: 'Bradicardia severa, BAV avanzado, shock cardiogénico.',
+          dosis: '50–100 mg VO cada 12–24 h (según formulación).',
+          farmacocinetica: 'Metabolismo hepático (CYP2D6).',
+          interacciones: 'Cuidado con depresores del nodo AV.',
+          notas: 'Preferible en EPOC comparado con no selectivos (igual vigilar).',
+          tags: ['cardiología'],
+        },
+        {
+          id: uid(),
+          nombre: 'Prazosina',
+          familia: 'Antagonistas adrenérgicos',
+          subfamilia: 'α1-bloqueador',
+          mecanismo: 'Bloquea receptores α1; vasodilatación arterial/venosa.',
+          indicaciones: 'HTA, síntomas urinarios por HBP (of-label en TEPT: pesadillas).',
+          efectos_adversos: 'Hipotensión ortostática (primera dosis), mareo.',
+          contraindicaciones: 'Hipotensión marcada.',
+          dosis: '1–5 mg VO c/12 h (titulación).',
+          farmacocinetica: 'Metabolismo hepático; vida media corta.',
+          interacciones: 'Potencia otros antihipertensivos.',
+          notas: 'Advertir “fenómeno de primera dosis”.',
+          tags: ['urología','HTA'],
+        },
+        {
+          id: uid(),
+          nombre: 'Fenoxibenzamina',
+          familia: 'Antagonistas adrenérgicos',
+          subfamilia: 'α-bloqueador no selectivo (irreversible)',
+          mecanismo: 'Antagonista irreversible de receptores α; reduce vasoconstricción mediada por catecolaminas.',
+          indicaciones: 'Feocromocitoma (preoperatorio).',
+          efectos_adversos: 'Hipotensión, taquicardia refleja, congestión nasal.',
+          contraindicaciones: 'Shock y estados anúricos (precaución).',
+          dosis: '10–20 mg VO c/8–12 h (titulación).',
+          farmacocinetica: 'Acción prolongada por unión covalente.',
+          interacciones: 'Potencia vasodilatadores.',
+          notas: 'Monitorizar TA y frecuencia.',
+          tags: ['endocrino'],
+        },
+        {
+          id: uid(),
+          nombre: 'Fentolamina',
+          familia: 'Antagonistas adrenérgicos',
+          subfamilia: 'α-bloqueador no selectivo (reversible)',
+          mecanismo: 'Antagonista competitivo de α1/α2; vasodilatación, taquicardia refleja.',
+          indicaciones: 'Crisis por feocromocitoma, extravasación de vasoconstrictores.',
+          efectos_adversos: 'Hipotensión, taquicardia, arritmias.',
+          contraindicaciones: 'Cardiopatía isquémica activa.',
+          dosis: '5–10 mg IV (según indicación).',
+          farmacocinetica: 'Inicio rápido, duración corta.',
+          interacciones: 'Potencia nitratos.',
+          notas: 'Uso hospitalario.',
+          tags: ['urgencias'],
+        },
+        {
+          id: uid(),
+          nombre: 'Epinefrina',
+          familia: 'Agonistas adrenérgicos',
+          subfamilia: 'Catecolamina endógena',
+          mecanismo: 'Agonista α1/α2/β1/β2; broncodilatación, ↑FC/contractilidad, vasoconstricción dosis-dependiente.',
+          indicaciones: 'Anafilaxia, paro cardiaco, vasoconstrictor local.',
+          efectos_adversos: 'Taquiarritmias, ansiedad, palidez.',
+          contraindicaciones: 'Relativas; riesgo en cardiopatía isquémica.',
+          dosis: 'Anafilaxia: 0.3–0.5 mg IM (1:1000).',
+          farmacocinetica: 'Rápida degradación por MAO/COMT.',
+          interacciones: 'IMAO, tricíclicos (potencian).',
+          notas: 'Autoinyector en pacientes de riesgo.',
+          tags: ['alergia','urgencias'],
+        },
+        {
+          id: uid(),
+          nombre: 'Norepinefrina',
+          familia: 'Agonistas adrenérgicos',
+          subfamilia: 'Catecolamina endógena',
+          mecanismo: 'Agonista α1/α2/β1; potente vasoconstrictor, ↑RVS.',
+          indicaciones: 'Choque séptico: vasopresor de 1ª línea.',
+          efectos_adversos: 'Isquemia periférica, arritmias.',
+          contraindicaciones: 'Hipovolemia no corregida.',
+          dosis: 'IV en perfusión (UCI).',
+          farmacocinetica: 'Degradación por MAO/COMT.',
+          interacciones: 'IMAO, anestésicos halogenados.',
+          notas: 'Titular a objetivo de PAM.',
+          tags: ['UCI','vasopresor'],
+        },
+        {
+          id: uid(),
+          nombre: 'Dopamina',
+          familia: 'Agonistas adrenérgicos',
+          subfamilia: 'Catecolamina endógena',
+          mecanismo: 'Agonista dopaminérgico/β1/α1 dosis-dependiente (baja: D1 renal; media: β1; alta: α1).',
+          indicaciones: 'Choque con bajo gasto (uso limitado actual).',
+          efectos_adversos: 'Taquiarritmias, náusea.',
+          contraindicaciones: 'Feocromocitoma, taquiarritmias no controladas.',
+          dosis: '2–20 mcg/kg/min IV.',
+          farmacocinetica: 'Rápida degradación por MAO/COMT.',
+          interacciones: 'IMAO.',
+          notas: 'No recomendado para protección renal.',
+          tags: ['UCI'],
+        },
+      ];
+
+      function Badge({ children }) {
+        return <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs border dark:border-gray-600">{children}</span>;
+      }
+
+      function Button({ children, variant = 'default', className = '', ...props }) {
+        const base = 'px-3 py-2 rounded-2xl border shadow-sm hover:shadow transition text-sm';
+        const variants = {
+          default: '',
+          primary: 'text-white',
+        };
+        const style = variant === 'primary' ? { backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' } : undefined;
+        return (
+          <button className={`${base} ${variants[variant]} ${className}`} style={style} {...props}>
+            {children}
+          </button>
+        );
+      }
+
+      function Input({ className = '', ...props }) {
+        return <input className={`w-full px-3 py-2 rounded-xl border outline-none focus:ring focus:ring-offset-0 dark:bg-gray-700 dark:border-gray-600 ${className}`} {...props} />;
+      }
+
+      function TextArea({ className = '', ...props }) {
+        return <textarea className={`w-full px-3 py-2 rounded-xl border outline-none focus:ring min-h-[80px] dark:bg-gray-700 dark:border-gray-600 ${className}`} {...props} />;
+      }
+
+      function Modal({ open, onClose, title, children, footer }) {
+        if (!open) return null;
+        return (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+            <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-800 p-4 sm:p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between gap-4">
+                <h3 className="text-lg font-semibold">{title}</h3>
+                <button className="rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-700" onClick={onClose} aria-label="Cerrar">✕</button>
+              </div>
+              <div className="mt-4">{children}</div>
+              {footer && <div className="mt-4 flex justify-end gap-2">{footer}</div>}
+            </div>
+          </div>
+        );
+      }
+
+      function buildFamilyTree(drugs) {
+        const tree = {};
+        for (const d of drugs) {
+          const fam = d.familia?.trim() || '(Sin familia)';
+          const sub = d.subfamilia?.trim() || '(Sin subfamilia)';
+          if (!tree[fam]) tree[fam] = { count: 0, subs: {} };
+          tree[fam].count += 1;
+          if (!tree[fam].subs[sub]) tree[fam].subs[sub] = 0;
+          tree[fam].subs[sub] += 1;
+        }
+        return tree;
+      }
+
+      function getColor(drug, colors) {
+        const c = (
+          drug.color ||
+          colors.subfamilies?.[`${drug.familia}||${drug.subfamilia}`] ||
+          colors.families?.[drug.familia] ||
+          null
+        );
+        return c && c !== '#ffffff' ? c : null;
+      }
+
+      function Sidebar({ drugs, selected, onSelect, onClear, colors, setColors }) {
+        const tree = React.useMemo(() => buildFamilyTree(drugs), [drugs]);
+        const families = Object.keys(tree).sort((a, b) => a.localeCompare(b, 'es'));
+        return (
+          <aside className="h-full overflow-y-auto p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Familias</h2>
+              <Button onClick={onClear}>Limpiar</Button>
+            </div>
+            <div className="space-y-2">
+              {families.map((fam) => (
+                <div key={fam}>
+                  <div className="flex items-center">
+                    <input
+                      type="color"
+                      className="w-5 h-5 mr-2 border-none bg-transparent cursor-pointer"
+                      value={colors.families?.[fam] || '#ffffff'}
+                      onChange={(e) => setColors((c) => ({
+                        ...c,
+                        families: { ...c.families, [fam]: e.target.value },
+                      }))}
+                    />
+                    <button
+                      className={`flex-1 flex items-center justify-between rounded-xl px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 ${selected.family === fam && !selected.subfamily ? 'bg-gray-100 dark:bg-gray-700' : ''}`}
+                      style={colors.families?.[fam] ? { borderLeft: `4px solid ${colors.families[fam]}` } : {}}
+                      onClick={() => onSelect({ family: fam, subfamily: null })}
+                    >
+                      <span className="text-left font-medium">{fam}</span>
+                      <Badge>{tree[fam].count}</Badge>
+                    </button>
+                  </div>
+                  <div className="ml-7 mt-1 space-y-1">
+                    {Object.keys(tree[fam].subs).sort((a, b) => a.localeCompare(b, 'es')).map((sub) => (
+                      <div key={sub} className="flex items-center">
+                        <input
+                          type="color"
+                          className="w-4 h-4 mr-2 border-none bg-transparent cursor-pointer"
+                          value={colors.subfamilies?.[`${fam}||${sub}`] || '#ffffff'}
+                          onChange={(e) => setColors((c) => ({
+                            ...c,
+                            subfamilies: { ...c.subfamilies, [`${fam}||${sub}`]: e.target.value },
+                          }))}
+                        />
+                        <button
+                          className={`flex-1 flex items-center justify-between rounded-lg px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 ${selected.family === fam && selected.subfamily === sub ? 'bg-gray-50 dark:bg-gray-700' : ''}`}
+                          style={colors.subfamilies?.[`${fam}||${sub}`] ? { borderLeft: `4px solid ${colors.subfamilies[`${fam}||${sub}`]}` } : {}}
+                          onClick={() => onSelect({ family: fam, subfamily: sub })}
+                        >
+                          <span className="truncate">{sub}</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-400">{tree[fam].subs[sub]}</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </aside>
+        );
+      }
+
+      function DrugForm({ initial, onSubmit }) {
+        const [form, setForm] = React.useState(
+          initial || {
+            id: uid(),
+            nombre: '',
+            familia: '',
+            subfamilia: '',
+            mecanismo: '',
+            indicaciones: '',
+            efectos_adversos: '',
+            contraindicaciones: '',
+            dosis: '',
+            farmacocinetica: '',
+            interacciones: '',
+            notas: '',
+            quickNote: '',
+            color: '',
+            tags: [],
+          }
+        );
+        const [tagInput, setTagInput] = React.useState('');
+
+        function handleChange(e) {
+          const { name, value } = e.target;
+          setForm((f) => ({ ...f, [name]: value }));
+        }
+
+        function addTag() {
+          const t = tagInput.trim();
+          if (!t) return;
+          setForm((f) => ({ ...f, tags: Array.from(new Set([...(f.tags || []), t])) }));
+          setTagInput('');
+        }
+
+        function removeTag(tag) {
+          setForm((f) => ({ ...f, tags: (f.tags || []).filter((x) => x !== tag) }));
+        }
+
+        return (
+          <form
+            className="grid grid-cols-1 md:grid-cols-2 gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSubmit({ ...form, nombre: form.nombre.trim() });
+            }}
+          >
+            <div>
+              <label className="text-sm">Nombre</label>
+              <Input name="nombre" value={form.nombre} onChange={handleChange} required />
+            </div>
+            <div>
+              <label className="text-sm">Familia</label>
+              <Input name="familia" value={form.familia} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="text-sm">Subfamilia</label>
+              <Input name="subfamilia" value={form.subfamilia} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="text-sm">Color</label>
+              <input
+                type="color"
+                name="color"
+                value={form.color || '#ffffff'}
+                onChange={handleChange}
+                className="w-full h-10 rounded-xl border dark:bg-gray-700 dark:border-gray-600"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm">Mecanismo de acción</label>
+              <TextArea name="mecanismo" value={form.mecanismo} onChange={handleChange} />
+            </div>
+
+            <div>
+              <label className="text-sm">Indicaciones</label>
+              <TextArea name="indicaciones" value={form.indicaciones} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="text-sm">Efectos adversos</label>
+              <TextArea name="efectos_adversos" value={form.efectos_adversos} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="text-sm">Contraindicaciones</label>
+              <TextArea name="contraindicaciones" value={form.contraindicaciones} onChange={handleChange} />
+            </div>
+
+            <div>
+              <label className="text-sm">Dosis (adulto)</label>
+              <TextArea name="dosis" value={form.dosis} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="text-sm">Farmacocinética (ADME)</label>
+              <TextArea name="farmacocinetica" value={form.farmacocinetica} onChange={handleChange} />
+            </div>
+
+            <div>
+              <label className="text-sm">Interacciones</label>
+              <TextArea name="interacciones" value={form.interacciones} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="text-sm">Notas</label>
+              <TextArea name="notas" value={form.notas} onChange={handleChange} />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm">Nota rápida</label>
+              <TextArea name="quickNote" value={form.quickNote || ''} onChange={handleChange} />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="text-sm">Etiquetas</label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  placeholder="Añadir etiqueta"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addTag();
+                    }
+                  }}
+                />
+                <Button type="button" onClick={addTag}>+ Añadir</Button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {(form.tags || []).map((t) => (
+                  <span key={t} className="inline-flex items-center gap-2 rounded-full border px-2 py-1 text-xs dark:border-gray-600">
+                    {t}
+                    <button type="button" className="rounded-full px-1 hover:bg-gray-100 dark:hover:bg-gray-700" onClick={() => removeTag(t)}>✕</button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="md:col-span-2 flex justify-end gap-2 mt-2">
+              <Button type="submit" variant="primary">Guardar</Button>
+            </div>
+          </form>
+        );
+      }
+
+      function DrugTable({ drugs, onEdit, onDelete, onNote, colors }) {
+        return (
+          <div className="overflow-x-auto rounded-2xl border dark:border-gray-700">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-700 text-left">
+                  <th className="p-3">Nombre</th>
+                  <th className="p-3">Familia</th>
+                  <th className="p-3">Subfamilia</th>
+                  <th className="p-3">Nota</th>
+                  <th className="p-3">Etiquetas</th>
+                  <th className="p-3 w-32">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drugs.map((d) => {
+                  const c = getColor(d, colors);
+                  return (
+                    <tr key={d.id} className="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700" style={c ? { borderLeft: `4px solid ${c}` } : {}}>
+                      <td className="p-3 font-medium">{d.nombre}</td>
+                      <td className="p-3">{d.familia}</td>
+                      <td className="p-3">{d.subfamilia}</td>
+                      <td className="p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate max-w-[120px]">{d.quickNote || ''}</span>
+                          <Button onClick={() => onNote(d)} className="px-2 py-1">✎</Button>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-1">
+                          {(d.tags || []).map((t) => <Badge key={t}>{t}</Badge>)}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-2">
+                          <Button onClick={() => onEdit(d)}>Editar</Button>
+                          <Button className="border-red-300 text-red-600 hover:bg-red-50 dark:hover:bg-red-700" onClick={() => onDelete(d.id)}>Borrar</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {drugs.length === 0 && (
+                  <tr>
+                    <td className="p-6 text-center text-gray-500" colSpan={6}>No hay fármacos con este filtro.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      function FieldPicker({ title, selected, onChange }) {
+        return (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600 dark:text-gray-400">{title}:</span>
+            <select
+              multiple
+              value={selected}
+              onChange={(e) => {
+                const opts = Array.from(e.target.selectedOptions).map((o) => o.value);
+                onChange(opts);
+              }}
+              className="min-w-[180px] rounded-xl border px-2 py-1 text-sm dark:bg-gray-700 dark:border-gray-600"
+              title="Mantén Ctrl/Cmd para selección múltiple"
+            >
+              {DEFAULT_FIELDS.map((f) => <option key={f} value={f}>{FIELD_LABEL[f] || f}</option>)}
+            </select>
+          </div>
+        );
+      }
+
+      function renderField(drug, field) {
+        if (field === 'farmacocinetica') return drug.farmacocinetica || '';
+        if (field === 'tags') return (drug.tags || []).join(', ');
+        return drug[field] || '';
+      }
+
+      function FlashSide({ drug, fields, sideLabel }) {
+        return (
+          <div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">{sideLabel}</div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {fields.map((f) => (
+                <div key={f}>
+                  <div className="text-xs text-gray-400 dark:text-gray-500">{FIELD_LABEL[f] || f}</div>
+                  <div className="font-medium whitespace-pre-wrap">{renderField(drug, f)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+
+      function shuffle(arr) {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+
+      function pickDistinct(pool, excludeDrug, mapper, n) {
+        const values = Array.from(new Set(pool.filter((d) => d.id !== excludeDrug.id).map(mapper).filter((x) => x && x.trim())));
+        const res = [];
+        while (values.length && res.length < n) {
+          const i = Math.floor(Math.random() * values.length);
+          res.push(values.splice(i, 1)[0]);
+        }
+        return res;
+      }
+
+      function buildQuiz(quizType, pool, num = 10) {
+        const questions = [];
+        const src = [...pool];
+        while (src.length && questions.length < num) {
+          const i = Math.floor(Math.random() * src.length);
+          const drug = src.splice(i, 1)[0];
+
+          let prompt = '';
+          let answer = '';
+          let options = [];
+
+          if (quizType === 'mecanismo_por_farmaco') {
+            prompt = `¿Cuál es el mecanismo de acción de ${drug.nombre}?`;
+            answer = drug.mecanismo || '';
+            const distractors = pickDistinct(pool, drug, (d) => d.mecanismo, 3);
+            options = shuffle([answer, ...distractors]);
+          } else if (quizType === 'familia_por_farmaco') {
+            prompt = `¿A qué familia pertenece ${drug.nombre}?`;
+            answer = drug.familia || '';
+            const distractors = pickDistinct(pool, drug, (d) => d.familia, 3);
+            options = shuffle([answer, ...distractors]);
+          } else if (quizType === 'farmaco_por_mecanismo') {
+            prompt = `¿Qué fármaco corresponde a este mecanismo?
+“${drug.mecanismo || '(sin mecanismo)'}”`;
+            answer = drug.nombre;
+            const distractors = pickDistinct(pool, drug, (d) => d.nombre, 3);
+            options = shuffle([answer, ...distractors]);
+          }
+
+          if (!answer || options.filter(Boolean).length < 2) continue;
+          questions.push({ id: uid(), prompt, answer, options });
+        }
+        return questions;
+      }
+
+      function Quiz({ items }) {
+        const [quizType, setQuizType] = React.useState(QUIZ_TYPES[0].id);
+        const [num, setNum] = React.useState(10);
+        const [questions, setQuestions] = React.useState([]);
+        const [index, setIndex] = React.useState(0);
+        const [selected, setSelected] = React.useState(null);
+        const [score, setScore] = React.useState(0);
+
+        function start() {
+          const q = buildQuiz(quizType, items, num);
+          setQuestions(q);
+          setIndex(0);
+          setSelected(null);
+          setScore(0);
+        }
+
+        function answer(opt) {
+          if (selected != null) return;
+          setSelected(opt);
+          const current = questions[index];
+          if (opt === current.answer) setScore((s) => s + 1);
+        }
+
+        function next() {
+          setSelected(null);
+          setIndex((i) => Math.min(i + 1, questions.length));
+        }
+
+        const current = questions[index];
+
+        return (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-gray-600 dark:text-gray-400">Tipo de pregunta</label>
+                  <select className="w-full rounded-xl border px-3 py-2 dark:bg-gray-700 dark:border-gray-600" value={quizType} onChange={(e) => setQuizType(e.target.value)}>
+                    {QUIZ_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 dark:text-gray-400">Número de preguntas</label>
+                  <Input type="number" min={1} max={50} value={num} onChange={(e) => setNum(parseInt(e.target.value || '1', 10))} />
+                </div>
+                <div className="flex items-end">
+                  <Button variant="primary" className="w-full" onClick={start}>Generar Quiz</Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs border dark:border-gray-600">Puntaje: {score} / {questions.length || 0}</span>
+              </div>
+            </div>
+
+            {!current ? (
+              <div className="text-gray-500 text-center py-10">Genera un quiz para comenzar.</div>
+            ) : (
+              <div className="space-y-4">
+                <div className="rounded-2xl border p-4 bg-white dark:bg-gray-800 dark:border-gray-700">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Pregunta {index + 1} / {questions.length}</div>
+                  <div className="whitespace-pre-wrap text-base font-medium">{current.prompt}</div>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-2">
+                  {current.options.map((opt, i) => {
+                    const isSel = selected === opt;
+                    const isCorrect = opt === current.answer;
+                    const cls = selected == null
+                      ? 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                      : isCorrect
+                        ? 'border-green-500 bg-green-50 dark:bg-green-900'
+                        : isSel
+                          ? 'border-red-400 bg-red-50 dark:bg-red-900'
+                          : 'opacity-70';
+                    return (
+                      <button key={i} className={`text-left rounded-xl border p-3 ${cls}`} onClick={() => answer(opt)} disabled={selected != null}>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex justify-end">
+                  <Button onClick={next}>{index + 1 >= questions.length ? 'Terminar' : 'Siguiente'}</Button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function Topbar({ onAdd, onImport, onExport, onSettings, search, setSearch, view, setView }) {
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Buscar por nombre, mecanismo o etiqueta…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="min-w-[220px]"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-xl border p-1 dark:border-gray-700">
+                {[
+                  { id: 'lista', label: 'Lista' },
+                  { id: 'flash', label: 'Flashcards' },
+                  { id: 'quiz', label: 'Quiz' },
+                ].map((v) => (
+                  <button
+                    key={v.id}
+                    className={`px-3 py-1.5 rounded-lg text-sm ${view === v.id ? 'text-white' : ''}`}
+                    style={view === v.id ? { backgroundColor: 'var(--accent)', borderColor: 'var(--accent)' } : {}}
+                    onClick={() => setView(v.id)}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+              <Button onClick={onAdd} variant="primary">+ Nueva ficha</Button>
+              <label className="px-3 py-2 rounded-2xl border shadow-sm text-sm cursor-pointer hover:shadow dark:border-gray-700">
+                Importar JSON
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      try {
+                        const json = JSON.parse(String(reader.result || '{}'));
+                        onImport(json);
+                      } catch (e) {
+                        alert('Archivo JSON inválido');
+                      }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <Button onClick={onExport}>Exportar JSON</Button>
+              <Button onClick={onSettings}>⚙️</Button>
+            </div>
+          </div>
+        );
+      }
+
+      function downloadJSON(filename, data) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+
+      function App() {
+      const [db, setDb] = React.useState([]);
+      const [prefs, setPrefs] = useLocalStorage(PREF_KEY, { dark: false, accent: '#2563eb' });
+      const [colors, setColors] = useLocalStorage(COLOR_KEY, { families: {}, subfamilies: {} });
+
+      React.useEffect(() => {
+        const col = dbFS.collection('drugs');
+        let seeded = false;
+        const unsub = col.onSnapshot((snap) => {
+          const arr = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          setDb(arr);
+          if (!seeded && arr.length === 0) {
+            SEED_DRUGS.forEach((d) => col.doc(d.id).set(d));
+            seeded = true;
+          }
+        });
+        return () => unsub();
+      }, []);
+
+        React.useEffect(() => {
+          document.documentElement.classList.toggle('dark', prefs.dark);
+          document.documentElement.style.setProperty('--accent', prefs.accent);
+        }, [prefs]);
+
+        const [view, setView] = React.useState('lista');
+        const [search, setSearch] = React.useState('');
+        const [filter, setFilter] = React.useState({ family: null, subfamily: null });
+
+        const [modalOpen, setModalOpen] = React.useState(false);
+        const [editing, setEditing] = React.useState(null);
+        const [noteEditing, setNoteEditing] = React.useState(null);
+
+        const [settingsOpen, setSettingsOpen] = React.useState(false);
+
+        const filtered = React.useMemo(() => {
+          const q = search.trim().toLowerCase();
+          return db.filter((d) => {
+            if (filter.family && d.familia !== filter.family) return false;
+            if (filter.subfamily && d.subfamilia !== filter.subfamily) return false;
+            if (!q) return true;
+            const hay = (
+              (d.nombre || '') + ' ' + (d.familia || '') + ' ' + (d.subfamilia || '') + ' ' +
+              (d.mecanismo || '') + ' ' + (d.indicaciones || '') + ' ' + (d.tags || []).join(' ')
+            ).normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+            const qq = q.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+            return hay.includes(qq);
+          });
+        }, [db, filter, search]);
+
+      function upsertDrug(drug) {
+        const data = { ...drug };
+        const id = data.id || uid();
+        data.id = id;
+        dbFS.collection('drugs').doc(id).set(data);
+      }
+
+      function deleteDrug(id) {
+        if (!confirm('¿Borrar esta ficha?')) return;
+        dbFS.collection('drugs').doc(id).delete();
+      }
+
+        function handleImport(json) {
+          if (!Array.isArray(json)) {
+            alert('El JSON debe ser un arreglo de fármacos');
+            return;
+          }
+          const cleaned = json
+            .map((d) => ({ ...d, id: d.id || uid(), nombre: String(d.nombre || '') }))
+            .filter((d) => d.nombre.trim());
+          if (cleaned.length === 0) return alert('No se importaron elementos válidos.');
+          if (!confirm(`Se importarán ${cleaned.length} fichas. Esto reemplazará tus datos actuales. ¿Continuar?`)) return;
+          const col = dbFS.collection('drugs');
+          db.forEach((d) => col.doc(d.id).delete());
+          cleaned.forEach((d) => col.doc(d.id).set(d));
+        }
+
+        function handleExport() {
+          downloadJSON('farmacos.json', db);
+        }
+
+        return (
+          <div className="h-full grid grid-rows-[auto,1fr] bg-gray-50 dark:bg-gray-900">
+            <header className="border-b bg-white dark:bg-gray-800 dark:border-gray-700">
+              <div className="max-w-6xl mx-auto p-3 sm:p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-xl font-bold">Fichas de Farmacología</h1>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Base local • {db.length} fármacos</div>
+                  </div>
+                </div>
+              </div>
+            </header>
+
+            <main className="grid grid-cols-1 lg:grid-cols-[280px,1fr] max-w-6xl mx-auto w-full gap-4 p-3 sm:p-4">
+              <div className="rounded-2xl border bg-white dark:bg-gray-800 dark:border-gray-700">
+                <Sidebar
+                  drugs={db}
+                  selected={filter}
+                  onSelect={(sel) => setFilter(sel)}
+                  onClear={() => setFilter({ family: null, subfamily: null })}
+                  colors={colors}
+                  setColors={setColors}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border bg-white dark:bg-gray-800 dark:border-gray-700 p-3 sm:p-4">
+                  <Topbar
+                    onAdd={() => { setEditing(null); setModalOpen(true); }}
+                    onImport={handleImport}
+                    onExport={handleExport}
+                    onSettings={() => setSettingsOpen(true)}
+                    search={search}
+                    setSearch={setSearch}
+                    view={view}
+                    setView={setView}
+                  />
+                </div>
+
+                <div className="rounded-2xl border bg-white dark:bg-gray-800 dark:border-gray-700 p-3 sm:p-4 min-h-[300px]">
+                  {view === 'lista' && (
+                    <DrugTable
+                      drugs={filtered}
+                      onEdit={(d) => { setEditing(d); setModalOpen(true); }}
+                      onDelete={deleteDrug}
+                      onNote={(d) => setNoteEditing(d)}
+                      colors={colors}
+                    />
+                  )}
+                  {view === 'flash' && <Flashcards items={filtered} colors={colors} />}
+                  {view === 'quiz' && <Quiz items={filtered} />}
+                </div>
+              </div>
+            </main>
+
+            <Modal
+              open={modalOpen}
+              onClose={() => setModalOpen(false)}
+              title={editing ? `Editar: ${editing.nombre}` : 'Nueva ficha'}
+              footer={<Button onClick={() => setModalOpen(false)}>Cerrar</Button>}
+            >
+              <DrugForm
+                initial={editing}
+                onSubmit={(d) => { upsertDrug(d); setModalOpen(false); }}
+              />
+            </Modal>
+
+            <Modal
+              open={!!noteEditing}
+              onClose={() => setNoteEditing(null)}
+              title={noteEditing ? `Nota rápida: ${noteEditing.nombre}` : ''}
+              footer={
+                <>
+                  <Button onClick={() => setNoteEditing(null)}>Cancelar</Button>
+                  <Button variant="primary" onClick={() => { upsertDrug(noteEditing); setNoteEditing(null); }}>Guardar</Button>
+                </>
+              }
+            >
+              <TextArea
+                value={noteEditing?.quickNote || ''}
+                onChange={(e) => setNoteEditing((d) => ({ ...d, quickNote: e.target.value }))}
+              />
+            </Modal>
+
+            <Modal
+              open={settingsOpen}
+              onClose={() => setSettingsOpen(false)}
+              title="Preferencias"
+              footer={<Button onClick={() => setSettingsOpen(false)}>Cerrar</Button>}
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm">Color de acento</label>
+                  <input type="color" className="mt-1" value={prefs.accent} onChange={(e) => setPrefs(p => ({ ...p, accent: e.target.value }))} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input id="darkmode" type="checkbox" checked={prefs.dark} onChange={(e) => setPrefs(p => ({ ...p, dark: e.target.checked }))} />
+                  <label htmlFor="darkmode" className="text-sm">Modo oscuro</label>
+                </div>
+              </div>
+            </Modal>
+
+            <footer className="text-center text-xs text-gray-500 dark:text-gray-400 py-3">Hecho para clases de Farmacología • Modo offline</footer>
+          </div>
+        );
+      }
+
+      function Flashcards({ items, colors }) {
+        const [shuffled, setShuffled] = React.useState([]);
+        const [index, setIndex] = React.useState(0);
+        const [showBack, setShowBack] = React.useState(false);
+        const [frontFields, setFrontFields] = React.useState(['nombre','familia','subfamilia']);
+        const [backFields, setBackFields] = React.useState(['mecanismo','indicaciones','efectos_adversos']);
+        const [knownCount, setKnownCount] = React.useState(0);
+        const [unknownCount, setUnknownCount] = React.useState(0);
+
+        React.useEffect(() => {
+          const arr = [...items];
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          setShuffled(arr);
+          setIndex(0);
+          setShowBack(false);
+          setKnownCount(0);
+          setUnknownCount(0);
+        }, [items]);
+
+        function nextCard(known) {
+          setShowBack(false);
+          setIndex((i) => Math.min(i + 1, shuffled.length));
+          if (known) setKnownCount((c) => c + 1);
+          else setUnknownCount((c) => c + 1);
+        }
+
+        const card = shuffled[index];
+        const progress = shuffled.length ? Math.min(index + 1, shuffled.length) / shuffled.length : 0;
+        const c = card ? getColor(card, colors) : null;
+
+        return (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Badge>{progress ? Math.round(progress * 100) : 0}%</Badge>
+                <Badge>✔️ {knownCount}</Badge>
+                <Badge>❓ {unknownCount}</Badge>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <FieldPicker title="Frente" selected={frontFields} onChange={setFrontFields} />
+                <FieldPicker title="Reverso" selected={backFields} onChange={setBackFields} />
+              </div>
+            </div>
+
+            {card ? (
+              <div className="grid gap-4">
+                <div
+                  className="rounded-2xl border p-6 shadow-sm bg-white dark:bg-gray-800 dark:border-gray-700 cursor-pointer select-none"
+                  style={c ? { borderColor: c } : {}}
+                  onClick={() => setShowBack((s) => !s)}
+                  title="Haz clic para voltear"
+                >
+                  {!showBack ? <FlashSide drug={card} fields={frontFields} sideLabel="Frente" /> : <FlashSide drug={card} fields={backFields} sideLabel="Reverso" />}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button onClick={() => nextCard(false)}>No la supe</Button>
+                  <Button variant="primary" onClick={() => nextCard(true)}>La supe</Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 py-10">No hay tarjetas.</div>
+            )}
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
